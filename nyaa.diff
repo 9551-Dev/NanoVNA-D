@@ -1,0 +1,144 @@
+diff --git a/fonts/Font7x11b.c b/fonts/Font7x11b.c
+index b4af1aa..2c3a96f 100644
+--- a/fonts/Font7x11b.c
++++ b/fonts/Font7x11b.c
+@@ -1695,12 +1695,12 @@ const uint8_t x7x11b_bits[] =
+ 
+ // Char '~' width = 7
+   0b00000000|CW_07, // |        |
+-  0b01100100,       // | **  *  |
+-  0b11111100,       // |******  |
+-  0b10011000,       // |*  **   |
+   0b00000000,       // |        |
+   0b00000000,       // |        |
+   0b00000000,       // |        |
++  0b01100100,       // | **  *  |
++  0b11111100,       // |******  |
++  0b10011000,       // |*  **   |
+   0b00000000,       // |        |
+   0b00000000,       // |        |
+   0b00000000,       // |        |
+diff --git a/hardware.h b/hardware.h
+index 9e4c23d..4d7f26b 100644
+--- a/hardware.h
++++ b/hardware.h
+@@ -96,9 +96,9 @@ bool i2c_receive(uint8_t addr, const uint8_t *w, size_t wn, uint8_t *r, size_t r
+ #define RTC_DR_MONTH(dr)        (((dr)>> 8)&0xFF)
+ #define RTC_DR_DAY(dr)          (((dr)>> 0)&0xFF)
+ 
+-#define RTC_TR_HOUR(dr)         (((tr)>>16)&0xFF)
+-#define RTC_TR_MIN(dr)          (((tr)>> 8)&0xFF)
+-#define RTC_TR_SEC(dr)          (((tr)>> 0)&0xFF)
++#define RTC_TR_HOUR(tr)         (((tr)>>16)&0xFF)
++#define RTC_TR_MIN(tr)          (((tr)>> 8)&0xFF)
++#define RTC_TR_SEC(tr)          (((tr)>> 0)&0xFF)
+ 
+ // Init RTC
+ void rtc_init(void);
+diff --git a/main.c b/main.c
+index 832ef42..7fb73cc 100644
+--- a/main.c
++++ b/main.c
+@@ -129,23 +129,13 @@ float measured[2][SWEEP_POINTS_MAX][2];
+ 
+ // Version text, displayed in Config->Version menu, also send by info command
+ const char *info_about[]={
+-  "Board: " BOARD_NAME,
+-  "2019-2024 Copyright @DiSlord (based on @edy555 source)",
+-  "Licensed under GPL.",
+-  "  https://github.com/DiSlord/NanoVNA-D",
+-  "Donate support:",
+-//  "  https://paypal.me/DiSlord",
+-  "  WebMoney: Z313822869119",
+   "Version: " VERSION " ["\
+   "p:"define_to_STR(SWEEP_POINTS_MAX)", "\
+   "IF:"define_to_STR(FREQUENCY_IF_K)"k, "\
+   "ADC:"define_to_STR(AUDIO_ADC_FREQ_K1)"k, "\
+   "Lcd:"define_to_STR(LCD_WIDTH)"x"define_to_STR(LCD_HEIGHT)\
+-  "]",  "Build Time: " __DATE__ " - " __TIME__,
+-//  "Kernel: " CH_KERNEL_VERSION,
+-//  "Compiler: " PORT_COMPILER_NAME,
++  "]",
+   "Architecture: " PORT_ARCHITECTURE_NAME " Core Variant: " PORT_CORE_VARIANT_NAME,
+-//  "Port Info: " PORT_INFO,
+   "Platform: " PLATFORM_NAME,
+   0 // sentinel
+ };
+diff --git a/ui.c b/ui.c
+index b506e66..13add6e 100644
+--- a/ui.c
++++ b/ui.c
+@@ -664,6 +664,14 @@ static const uint8_t qr_code_map[] = {
+ };
+ #endif
+ 
++#define MOTD_COUNT 3
++static const char* motds[] = {
++  "No tail no talk",
++  "Nyaaa~ :3",
++  "Bwesky <3",
++  // add more if you have ideas because i don't, don't forget to change the MOTD_COUNT or shit will explode
++};
++
+ static void ui_show_version(void) {
+   int x = 5, y = 5, i = 1;
+   int str_height = FONT_STR_HEIGHT + 2;
+@@ -671,31 +679,29 @@ static void ui_show_version(void) {
+ 
+   lcd_clear_screen();
+   uint16_t shift = 0b00010010000;
+-  lcd_drawstring_size(BOARD_NAME, x , y, 3);
++#ifdef __USE_RTC__
++  uint32_t tr = rtc_get_tr_bin(); // TR read first
++  uint32_t sec = RTC_TR_SEC(tr);
++  lcd_drawstring_size(motds[tr % MOTD_COUNT], x, y, 3);
++#else
++  lcd_drawstring_size("nyaaa~ :3", x, y, 3);
++#endif
+   y+=FONT_GET_HEIGHT*3+3-5;
+   while (info_about[i]) {
+     do {shift>>=1; y+=5;} while (shift&1);
+     lcd_drawstring(x, y+=str_height-5, info_about[i++]);
+   }
+-  uint32_t id0 = *(uint32_t *)0x1FFFF7AC; // MCU id0 address
+-  uint32_t id1 = *(uint32_t *)0x1FFFF7B0; // MCU id1 address
+-  uint32_t id2 = *(uint32_t *)0x1FFFF7B4; // MCU id2 address
+-  lcd_printf(x, y+= str_height, "SN: %08x-%08x-%08x", id0, id1, id2);
+-  lcd_printf(x, y+= str_height, "TCXO = %q" S_Hz, config._xtal_freq);
+-  lcd_printf(LCD_WIDTH - 20*FONT_WIDTH, LCD_HEIGHT - FONT_STR_HEIGHT - 2, "\002\026" "In memory of Maya" "\002\001");
++  lcd_printf(LCD_WIDTH - 12*FONT_WIDTH, LCD_HEIGHT - FONT_STR_HEIGHT - 2, "\002\026" "bwesky :3" "\002\001");
+   y+=str_height*2;
+ #ifdef QR_CODE_DRAW
+   lcd_blitBitmapScale(LCD_WIDTH - 32*3, 5, 31, 31, 3, qr_code_map);
+ #endif
+-  // Update battery and time
+-  uint16_t cnt = 0;
+   while (true) {
+     if (touch_check() == EVT_TOUCH_PRESSED)
+       break;
+     if (btn_check() & EVT_BUTTON_SINGLE_CLICK)
+       break;
+     chThdSleepMilliseconds(40);
+-    if ((cnt++)&0x07) continue; // Not update time so fast
+ 
+ #ifdef __USE_RTC__
+     uint32_t tr = rtc_get_tr_bin(); // TR read first
+@@ -704,15 +710,13 @@ static void ui_show_version(void) {
+       RTC_DR_YEAR(dr),
+       RTC_DR_MONTH(dr),
+       RTC_DR_DAY(dr),
+-      RTC_TR_HOUR(dr),
+-      RTC_TR_MIN(dr),
+-      RTC_TR_SEC(dr),
++      RTC_TR_HOUR(tr),
++      RTC_TR_MIN(tr),
++      RTC_TR_SEC(tr),
+       (RCC->BDCR & STM32_RTCSEL_MASK) == STM32_RTCSEL_LSE ? 'E' : 'I');
+ #endif
+-#if 1
+     uint32_t vbat=adc_vbat_read();
+     lcd_printf(x, y + str_height, "Batt: %d.%03d" S_VOLT, vbat/1000, vbat%1000);
+-#endif
+   }
+ }
+ 

@@ -19,9 +19,6 @@
  * Boston, MA 02110-1301, USA.
  */
 
-
-#define QR_CODE_DRAW
-
 #include "nanovna.h"
 #include "hal.h"
 #include "chprintf.h"
@@ -39,9 +36,6 @@
 #define EVT_UP                      0x10
 #define EVT_DOWN                    0x20
 #define EVT_REPEAT                  0x40
-
-#define BATTERY_TOP_LEVEL       4200
-#define BATTERY_BOTTOM_LEVEL    3200
 
 #define BUTTON_DOWN_LONG_TICKS      MS2ST(500)   // 500ms
 #define BUTTON_DOUBLE_TICKS         MS2ST(250)   // 250ms
@@ -632,81 +626,92 @@ static void touch_position(int *x, int *y) {
   *y = ty;
 }
 
-#define MOTD_COUNT 5
-static const char* motds[] = {
-  "No tail no talk",
-  "Nyaaa~ :3",
-  "NyanoVNA-H 4",
-  "Meow!",
-  "Bwesky <3",
-  // add more if you have ideas because i don't, don't forget to change the MOTD_COUNT or shit will explode
+#ifdef QR_CODE_DRAW
+// 31x31 QR code image
+// https://github.com/DiSlord/NanoVNA-D
+static const uint8_t qr_code_map[] = {
+  0xff, 0xff, 0xff, 0xfe,
+  0x80, 0xa2, 0x2e, 0x02,
+  0xbe, 0xe8, 0xea, 0xfa,
+  0xa2, 0xaa, 0x4a, 0x8a,
+  0xa2, 0xce, 0xca, 0x8a,
+  0xa2, 0xe8, 0x66, 0x8a,
+  0xbe, 0x93, 0x8a, 0xfa,
+  0x80, 0xaa, 0xaa, 0x02,
+  0xff, 0xea, 0xaf, 0xfe,
+  0xae, 0x58, 0xbb, 0x6a,
+  0xab, 0x00, 0x60, 0x72,
+  0xca, 0x63, 0x62, 0x0a,
+  0xe1, 0xbd, 0xf9, 0x9e,
+  0x8a, 0xa5, 0x32, 0x7a,
+  0xbd, 0x8b, 0xba, 0x72,
+  0xae, 0x40, 0x14, 0x3a,
+  0xb3, 0xfe, 0x32, 0x7e,
+  0x98, 0x58, 0xa8, 0xfa,
+  0xe9, 0x30, 0x96, 0x62,
+  0x8c, 0x27, 0x37, 0x9a,
+  0xfb, 0xfd, 0x2a, 0xbe,
+  0x96, 0xb1, 0x58, 0x16,
+  0xff, 0xab, 0x9b, 0x8a,
+  0x80, 0xac, 0x7a, 0xba,
+  0xbe, 0xf6, 0x33, 0xbe,
+  0xa2, 0xdc, 0xb0, 0x1a,
+  0xa2, 0xd4, 0x31, 0x8a,
+  0xa2, 0x87, 0x0d, 0xb2,
+  0xbe, 0xc1, 0x2b, 0x1e,
+  0x80, 0xbf, 0xbb, 0x9a,
+  0xff, 0xff, 0xff, 0xfe,
 };
-
-#include <yuri.h>
-#include <meow.h>
+#endif
 
 static void ui_show_version(void) {
-  int x = 5, y = 5, i = 0;
+  int x = 5, y = 5, i = 1;
   int str_height = FONT_STR_HEIGHT + 2;
   lcd_set_colors(LCD_FG_COLOR, LCD_BG_COLOR);
 
   lcd_clear_screen();
-  uint32_t vbat=adc_vbat_read();
-  lcd_drawstring_size(motds[vbat % MOTD_COUNT], x, y, 3);
+  uint16_t shift = 0b00010010000;
+  lcd_drawstring_size("nyaaa~ :3", x , y, 3);
   y+=FONT_GET_HEIGHT*3+3-5;
-
-#ifdef __YURI__
-  lcd_blitBitmapScale(
-    LCD_WIDTH  - yuri_image.width  - 15,
-    LCD_HEIGHT - yuri_image.height - 15,
-    yuri_image
-  );
-  lcd_blitBitmapScale(
-    LCD_WIDTH  - (meow_image.width + 40),
-    FONT_GET_HEIGHT + 5,
-    meow_image
-  );
-#endif
-
   while (info_about[i]) {
-    if (i == 5 || i == 7) { y += FONT_GET_HEIGHT/2; }
-    lcd_drawstring(x, y+=((FONT_GET_HEIGHT+1)), info_about[i++]);
+    do {shift>>=1; y+=5;} while (shift&1);
+    lcd_drawstring(x, y+=str_height-5, info_about[i++]);
   }
-  y += str_height * 2;
-  lcd_printf(x, LCD_HEIGHT - FONT_STR_HEIGHT - 2, "\002\026" "bwesky :3" "\002\001");
+  uint32_t id0 = *(uint32_t *)0x1FFFF7AC; // MCU id0 address
+  uint32_t id1 = *(uint32_t *)0x1FFFF7B0; // MCU id1 address
+  uint32_t id2 = *(uint32_t *)0x1FFFF7B4; // MCU id2 address
+  lcd_printf(x, y+= str_height, "SN: %08x-%08x-%08x", id0, id1, id2);
+  lcd_printf(x, y+= str_height, "TCXO = %q" S_Hz, config._xtal_freq);
+  lcd_printf(LCD_WIDTH - 12*FONT_WIDTH, LCD_HEIGHT - FONT_STR_HEIGHT - 2, "\002\026" "bwesky :3" "\002\001");
+  y+=str_height*2;
+#ifdef QR_CODE_DRAW
+  lcd_blitBitmapScale(LCD_WIDTH - 32*3, 5, 31, 31, 3, qr_code_map);
+#endif
+  // Update battery and time
+  uint16_t cnt = 0;
   while (true) {
     if (touch_check() == EVT_TOUCH_PRESSED)
       break;
     if (btn_check() & EVT_BUTTON_SINGLE_CLICK)
       break;
     chThdSleepMilliseconds(40);
+    if ((cnt++)&0x07) continue; // Not update time so fast
 
-    uint32_t screen_char_width = LCD_WIDTH/FONT_WIDTH;
-    uint32_t charge_bar_width  = screen_char_width-15;
-
-    lcd_printf(x+12*FONT_WIDTH,FONT_GET_HEIGHT*7,"[");
-    lcd_printf(x+12*FONT_WIDTH+(charge_bar_width+1)*FONT_WIDTH,FONT_GET_HEIGHT*7,"]");
-
-    uint32_t vbat=adc_vbat_read();
-    lcd_printf(x,FONT_GET_HEIGHT*7,"Batt: %d.%03d" S_VOLT, vbat/1000, vbat%1000);
-    float battery_range = BATTERY_TOP_LEVEL-BATTERY_BOTTOM_LEVEL;
-    float battery_range_inset = vbat-BATTERY_BOTTOM_LEVEL;
-    float battery_charge_percent = battery_range_inset/battery_range;
-    for (float i=0; i<(charge_bar_width*battery_charge_percent);i++) {
-      lcd_printf(x+12*FONT_WIDTH+(i+1)*FONT_WIDTH,FONT_GET_HEIGHT*7,"=");
-    }
-    //lcd_printf(x+12*FONT_WIDTH+i,y-str_height,"%d:%d",battery_range,battery_range_inset);
 #ifdef __USE_RTC__
-    uint32_t tr = rtc_get_tr_bin();
-    uint32_t dr = rtc_get_dr_bin();
-    lcd_printf(LCD_WIDTH - FONT_WIDTH * 23, 5, "20%02d/%02d/%02d %02d:%02d:%02d (LS%c)",
+    uint32_t tr = rtc_get_tr_bin(); // TR read first
+    uint32_t dr = rtc_get_dr_bin(); // DR read second
+    lcd_printf(x, y, "Time: 20%02d/%02d/%02d %02d:%02d:%02d" " (LS%c)",
       RTC_DR_YEAR(dr),
       RTC_DR_MONTH(dr),
       RTC_DR_DAY(dr),
-      RTC_TR_HOUR(tr),
-      RTC_TR_MIN(tr),
-      RTC_TR_SEC(tr),
+      RTC_TR_HOUR(dr),
+      RTC_TR_MIN(dr),
+      RTC_TR_SEC(dr),
       (RCC->BDCR & STM32_RTCSEL_MASK) == STM32_RTCSEL_LSE ? 'E' : 'I');
+#endif
+#if 1
+    uint32_t vbat=adc_vbat_read();
+    lcd_printf(x, y + str_height, "Batt: %d.%03d" S_VOLT, vbat/1000, vbat%1000);
 #endif
   }
 }
@@ -717,7 +722,7 @@ void ui_enter_dfu(void)
   touch_stop_watchdog();
   int x = 5, y = 20;
   lcd_set_colors(LCD_FG_COLOR, LCD_BG_COLOR);
-  // leave a last message
+  // leave a last message 
   lcd_clear_screen();
   lcd_drawstring(x, y, "DFU: Device Firmware Update Mode\n"
                        "To exit DFU mode, please reset device yourself.");
@@ -2861,7 +2866,7 @@ static const keypads_t keypads_mfloat[] = {
   { 0x00, KP_7 },
   { 0x10, KP_8 },
   { 0x20, KP_9 },
-  { 0x30, KP_k },
+  { 0x30, KP_u },
   { 0x31, KP_m },
   { 0x32, KP_MINUS },
   { 0x33, KP_ENTER },

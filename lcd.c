@@ -891,23 +891,95 @@ int lcd_printfV(int16_t x, int16_t y, const char *fmt, ...) {
   return retval;
 }
 
-void lcd_blitBitmapScale(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t size, const uint8_t *b) {
-  lcd_setWindow(x, y, w * size, h * size, LCD_RAMWR);
-  for (int c = 0; c < h; c++) {
-    const uint8_t *ptr = b; uint8_t bits = 0;
-    for (int i = 0; i < size; i++) {
-      ptr = b;
-      for (int r = 0; r < w; r++, bits <<= 1) {
-        if ((r&7) == 0) bits = *ptr++;
-        for (int j = 0; j < size; j++) {
-          while (SPI_TX_IS_NOT_EMPTY(LCD_SPI));
-          SPI_WRITE_16BIT(LCD_SPI, (0x80 & bits) ? foreground_color : background_color);
-        }
+#ifdef __YURI__
+
+struct Pixel {
+  uint32_t a;
+  uint32_t r;
+  uint32_t g;
+  uint32_t b;
+};
+
+uint32_t qoi_hash(struct Pixel px) {
+  return (px.r * 3 + px.g * 5 + px.b * 7 + px.a * 11) % 64;
+}
+
+#define QOI_OP_RGB  0xfe
+#define QOI_OP_RGBA 0xff
+#define QOI_OP_IDX  0x00 << 6
+#define QOI_OP_DIFF 0x01 << 6
+#define QOI_OP_LUMA 0x02 << 6
+#define QOI_OP_RUN  0x03 << 6
+
+void lcd_blitBitmapScale(uint16_t x, uint16_t y, image_t image) {
+  lcd_setWindow(x, y, image.width, image.height, LCD_RAMWR);
+
+  struct Pixel px = {255, 0, 0, 0};
+  struct Pixel cache[64] = {0};
+
+  uint32_t i = 14;
+  for (;i < image.len;) {
+    uint8_t tag = image.data[i++];
+    uint8_t masked = tag & 0xc0;
+
+    if ((tag & QOI_OP_RGB) == QOI_OP_RGB) {
+      uint8_t r = image.data[i++];
+      uint8_t g = image.data[i++];
+      uint8_t b = image.data[i++];
+
+      px.r = r;
+      px.g = g;
+      px.b = b;
+
+      if (tag == QOI_OP_RGBA)
+        px.a = image.data[i++];
+
+      while (SPI_TX_IS_NOT_EMPTY(LCD_SPI));
+      SPI_WRITE_16BIT(LCD_SPI, RGB565(px.r, px.g, px.b));
+    } else if (masked == QOI_OP_IDX) {
+      uint8_t idx = tag & 0x3f;
+
+      px = cache[idx];
+      while (SPI_TX_IS_NOT_EMPTY(LCD_SPI));
+      SPI_WRITE_16BIT(LCD_SPI, RGB565(px.r, px.g, px.b));
+    } else if (masked == QOI_OP_DIFF) {
+      uint8_t db = (tag & 0x03) - 2;
+      uint8_t dg = ((tag >> 2) & 0x03) - 2;
+      uint8_t dr = ((tag >> 4) & 0x03) - 2;
+
+      px.r += dr;
+      px.g += dg;
+      px.b += db;
+
+      while (SPI_TX_IS_NOT_EMPTY(LCD_SPI));
+      SPI_WRITE_16BIT(LCD_SPI, RGB565(px.r, px.g, px.b));
+    } else if (masked == QOI_OP_LUMA) {
+      int8_t other = image.data[i++];
+      int8_t dg = (tag & 0x3f) - 32;
+      int8_t db = dg + (other & 0x0f) - 8;
+      int8_t dr = dg + ((other >> 4) & 0x0f) - 8;
+
+      px.r += dr;
+      px.g += dg;
+      px.b += db;
+
+      while (SPI_TX_IS_NOT_EMPTY(LCD_SPI));
+      SPI_WRITE_16BIT(LCD_SPI, RGB565(px.r, px.g, px.b));
+    } else if (masked == QOI_OP_RUN) {
+      uint8_t run = (tag & 0x3f) + 1;
+
+      for (int v = 0; v < run; v++) {
+        while (SPI_TX_IS_NOT_EMPTY(LCD_SPI));
+        SPI_WRITE_16BIT(LCD_SPI, RGB565(px.r, px.g, px.b));
       }
     }
-    b = ptr;
+
+    cache[qoi_hash(px)] = px;
   }
+
+  while (SPI_TX_IS_NOT_EMPTY(LCD_SPI));
 }
+#endif
 
 int lcd_drawchar_size(uint8_t ch, int x, int y, uint8_t size) {
   const uint8_t *char_buf = FONT_GET_DATA(ch);

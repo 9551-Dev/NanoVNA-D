@@ -129,24 +129,19 @@ float measured[2][SWEEP_POINTS_MAX][2];
 
 // Version text, displayed in Config->Version menu, also send by info command
 const char *info_about[]={
-  "Board: " BOARD_NAME,
-  "2019-2024 Copyright @DiSlord (based on @edy555 source)",
-  "Licensed under GPL.",
-  "  https://github.com/DiSlord/NanoVNA-D",
-  "Donate support:",
-//  "  https://paypal.me/DiSlord",
-  "  WebMoney: Z313822869119",
+  "Board: MrowVNA-H 4",
   "Version: " VERSION " ["\
   "p:"define_to_STR(SWEEP_POINTS_MAX)", "\
   "IF:"define_to_STR(FREQUENCY_IF_K)"k, "\
   "ADC:"define_to_STR(AUDIO_ADC_FREQ_K1)"k, "\
   "Lcd:"define_to_STR(LCD_WIDTH)"x"define_to_STR(LCD_HEIGHT)\
-  "]",  "Build Time: " __DATE__ " - " __TIME__,
-//  "Kernel: " CH_KERNEL_VERSION,
-//  "Compiler: " PORT_COMPILER_NAME,
-  "Architecture: " PORT_ARCHITECTURE_NAME " Core Variant: " PORT_CORE_VARIANT_NAME,
-//  "Port Info: " PORT_INFO,
+  "]",
+  " ",
+  " ",
   "Platform: " PLATFORM_NAME,
+  "Architecture: " PORT_ARCHITECTURE_NAME,
+  "  - Core Variant: " PORT_CORE_VARIANT_NAME,
+  "Build Time: " __DATE__ " - " __TIME__,
   0 // sentinel
 };
 
@@ -813,10 +808,10 @@ VNA_SHELL_FUNCTION(cmd_gamma)
   float gamma[2];
   (void)argc;
   (void)argv;
-  
+
   pause_sweep();
   chMtxLock(&mutex);
-  wait_dsp(4);  
+  wait_dsp(4);
   calculate_gamma(gamma);
   chMtxUnlock(&mutex);
 
@@ -2697,7 +2692,7 @@ VNA_SHELL_FUNCTION(cmd_lcd){
 #if CH_CFG_USE_REGISTRY == FALSE
 #error "Threads Requite enabled CH_CFG_USE_REGISTRY in chconf.h"
 #endif
-VNA_SHELL_FUNCTION(cmd_threads) 
+VNA_SHELL_FUNCTION(cmd_threads)
 {
   static const char *states[] = {CH_STATE_NAMES};
   thread_t *tp;
@@ -3438,7 +3433,7 @@ void HardFault_Handler(void)
   hard_fault_handler_c(sp);
 }
 
-void hard_fault_handler_c(uint32_t *sp) 
+void hard_fault_handler_c(uint32_t *sp)
 {
 #ifdef ENABLE_HARD_FAULT_HANDLER_DEBUG
   uint32_t r0  = sp[0];

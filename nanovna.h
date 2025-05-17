@@ -18,6 +18,7 @@
  * the Free Software Foundation, Inc., 51 Franklin Street,
  * Boston, MA 02110-1301, USA.
  */
+#define __YURI__
 #pragma once
 #include "ch.h"
 
@@ -818,7 +819,7 @@ enum {
 // Max palette indexes in config
 #define MAX_PALETTE     32
 
-// trace 
+// trace
 #define MAX_TRACE_TYPE 30
 enum trace_type {
   TRC_LOGMAG=0, TRC_PHASE, TRC_DELAY, TRC_SMITH, TRC_POLAR, TRC_LINEAR, TRC_SWR, TRC_REAL, TRC_IMAG,
@@ -1249,6 +1250,13 @@ typedef struct {
   int8_t shift_y : 8;
 } vector_data;
 
+typedef struct {
+  uint16_t width;
+  uint16_t height;
+  uint16_t len;
+  uint8_t* data;
+} image_t;
+
 // Used for easy define big Bitmap as 0bXXXXXXXXX image
 #define _BMP8(d)                                                        ((d)&0xFF)
 #define _BMP16(d)                                      (((d)>>8)&0xFF), ((d)&0xFF)
@@ -1274,7 +1282,9 @@ void lcd_set_background(uint16_t bg_idx);
 void lcd_set_colors(uint16_t fg_idx, uint16_t bg_idx);
 void lcd_clear_screen(void);
 void lcd_blitBitmap(uint16_t x, uint16_t y, uint16_t width, uint16_t height, const uint8_t *bitmap);
-void lcd_blitBitmapScale(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t size, const uint8_t *b);
+#ifdef __YURI__
+void lcd_blitBitmapScale(uint16_t x, uint16_t y, image_t image);
+#endif
 void lcd_drawchar(uint8_t ch, int x, int y);
 #if 0
 void lcd_drawstring(int16_t x, int16_t y, const char *str);
